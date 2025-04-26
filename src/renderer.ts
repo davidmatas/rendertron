@@ -183,8 +183,11 @@ export class Renderer {
     }
 
     // Must be jpeg & binary format.
-    const screenshotOptions =
-      Object.assign({}, options, { type: 'jpeg', encoding: 'binary' });
+    const screenshotOptions = {
+      ...options,
+      type: 'jpeg' as const,
+      encoding: 'binary' as const
+    };
     // Screenshot returns a buffer based on specified encoding above.
     // https://github.com/GoogleChrome/puppeteer/blob/v1.8.0/docs/api.md#pagescreenshotoptions
     const buffer = await page.screenshot(screenshotOptions) as Buffer;
@@ -197,18 +200,32 @@ export class Renderer {
   async getFinalUrl(requestUrl: string): Promise<string> {
     const page = await this.browser.newPage();
     try {
+      // Configurar un user-agent más realista para evitar bloqueos
+      await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
       // Configurar el timeout y otros ajustes necesarios
-      await page.setDefaultNavigationTimeout(this.config.timeout);
+      await page.setDefaultNavigationTimeout(30000); // 30 segundos para URLs complejas
+
+      // Configurar para aceptar cookies y otros datos
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      });
 
       // Navegar a la URL y esperar a que se complete la navegación
+      // Usamos 'domcontentloaded' en lugar de 'networkidle0' para no esperar a que se detenga toda la actividad de red
       const response = await page.goto(requestUrl, {
-        waitUntil: 'networkidle0',
-        timeout: this.config.timeout
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
       });
 
       if (!response) {
         throw new Error('No response received');
       }
+
+      // Esperar un poco más para que se completen las redirecciones
+      // Usamos setTimeout en lugar de waitForTimeout que no está disponible en esta versión
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Obtener la URL final después de todas las redirecciones
       const finalUrl = page.url();
