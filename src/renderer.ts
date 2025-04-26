@@ -183,14 +183,14 @@ export class Renderer {
     }
 
     // Must be jpeg & binary format.
-    const screenshotOptions = {
+    const screenshotOptions: any = {
       ...options,
-      type: 'jpeg' as const,
-      encoding: 'binary' as const
+      type: 'jpeg',
+      encoding: 'binary'
     };
     // Screenshot returns a buffer based on specified encoding above.
     // https://github.com/GoogleChrome/puppeteer/blob/v1.8.0/docs/api.md#pagescreenshotoptions
-    const buffer = await page.screenshot(screenshotOptions) as Buffer;
+    const buffer = await page.screenshot(screenshotOptions) as unknown as Buffer;
     return buffer;
   }
 
@@ -223,9 +223,22 @@ export class Renderer {
         throw new Error('No response received');
       }
 
-      // Esperar un poco más para que se completen las redirecciones
-      // Usamos setTimeout en lugar de waitForTimeout que no está disponible en esta versión
+      // Esperar 5 segundos usando setTimeout
       await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Intenta detectar meta refresh
+      const metaRefreshUrl = await page.$eval('meta[http-equiv="refresh"]', el => {
+        const content = el.getAttribute('content');
+        if (content) {
+          const match = content.match(/url=(.*)/i);
+          return match ? match[1] : null;
+        }
+        return null;
+      }).catch(() => null);
+
+      if (metaRefreshUrl) {
+        await page.goto(metaRefreshUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      }
 
       // Obtener la URL final después de todas las redirecciones
       const finalUrl = page.url();
